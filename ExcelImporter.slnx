@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="ExcelImporter.Business/ExcelImporter.Business.csproj" />
+  <Project Path="ExcelImporter.Repository/ExcelImporter.Repository.csproj" />
+  <Project Path="ExcelImporter.Worker/ExcelImporter.Worker.csproj" />
+</Solution>
