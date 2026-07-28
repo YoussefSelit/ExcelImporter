@@ -27,11 +27,11 @@ public class RecordRepository : IRecordRepository
         connection.Open();
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM user_tables WHERE table_name = :tableName";
+        cmd.CommandText = "SELECT COUNT(*) FROM user_tables WHERE table_name = :tableName"; //3ashan neshouf lw fi data fel table wala mafish
         cmd.Parameters.Add(new OracleParameter("tableName", tableName.ToUpper()));
 
-        int count = Convert.ToInt32(cmd.ExecuteScalar());
-        return count > 0;
+        int count = Convert.ToInt32(cmd.ExecuteScalar()); //executes the query and returns the count
+        return count > 0; //true (table exists) lw akbar mn 0, false lw la2
     }
 
     public void CreateTableFromDataTable(string tableName, DataTable table)
@@ -42,8 +42,8 @@ public class RecordRepository : IRecordRepository
         var columnDefs = new List<string>();
         foreach (DataColumn col in table.Columns)
         {
-            string oracleType = MapToOracleType(col.DataType);
-            columnDefs.Add($"{col.ColumnName} {oracleType}");
+            string oracleType = MapToSQLType(col.DataType); //defines the data type (for oracle) the column holds 
+            columnDefs.Add($"{col.ColumnName} {oracleType}"); //takes column names ma3 each type
         }
 
         string sql = $"CREATE TABLE {tableName} ({string.Join(", ", columnDefs)})";
@@ -102,7 +102,7 @@ public class RecordRepository : IRecordRepository
         }
     }
 
-    private string MapToOracleType(Type type)
+    private string MapToSQLType(Type type)
     {
         if (type == typeof(int)) return "NUMBER";
         if (type == typeof(decimal)) return "NUMBER(18,2)";
