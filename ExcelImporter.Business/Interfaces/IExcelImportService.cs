@@ -1,11 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Data;
 
-namespace ExcelImporter.Business.Interfaces
+namespace ExcelImporter.Business.Interfaces;
+
+public interface IExcelImportService
 {
-    public interface IExcelImportService
-    {
-        Task ImportExcelAsync();
-    }
+    DataTable ReadExcelToDataTable(string filePath);
+
+    void ImportFile(string filePath, string archiveFolder);
+
+    void ImportAllPendingFiles(string sourceFolder, string archiveFolder);
 }

@@ -1,150 +1,140 @@
-﻿using ExcelImporter.Business.Interfaces;
+﻿using ClosedXML.Excel;
+using ExcelImporter.Business.Interfaces;
 using ExcelImporter.Repository.Interfaces;
-using ExcelImporter.Repository.Entities;  
-using ClosedXML.Excel;
 using System;
-using System.Collections.Generic;
+using System.Data;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 
-namespace ExcelImporter.Business.Services
+namespace ExcelImporter.Business.Services;
+
+public class ExcelImportService : IExcelImportService
 {
+    private readonly IRecordRepository _repository;
 
-
-    public class ExcelImportService
+    public ExcelImportService(IRecordRepository repository)
     {
-        private readonly ICardImportRepository _repository;
+        _repository = repository;
+    }
 
-        public ExcelImportService(ICardImportRepository repository)
+    public DataTable ReadExcelToDataTable(string filePath)
+    {
+        var table = new DataTable();
+
+        using var workbook = new XLWorkbook(filePath);
+        var worksheet = workbook.Worksheet(1);
+        var lastRow = worksheet.LastRowUsed().RowNumber();
+        var lastDataRow = lastRow - 2;
+
+        var headerRow = worksheet.Row(15);
+        var sampleRow = worksheet.Row(17);
+        int colCount = headerRow.CellsUsed().Count();
+
+        for (int col = 1; col <= colCount; col++)
         {
-            _repository = repository;
+            string colName = headerRow.Cell(col).GetString().Trim();
+            if (string.IsNullOrWhiteSpace(colName))
+                continue;
+
+            string sampleValue = sampleRow.Cell(col).GetString().Trim();
+            Type colType = InferType(sampleValue);
+
+            table.Columns.Add(colName, colType);
         }
 
-        public List<CardImport> ReadCardRecordsFromExcel(string filePath)
+        foreach (var row in worksheet.RowsUsed())
         {
-            var records = new List<CardImport>();
+            int rowNum = row.RowNumber();
 
-            using (var workbook = new XLWorkbook(filePath))
+            if (rowNum <= 16)
+                continue;
+
+            if (rowNum > lastDataRow)
+                break;
+
+            string firstCell = row.Cell(1).GetString().Trim();
+            if (string.IsNullOrWhiteSpace(firstCell))
+                continue;
+
+            var dataRow = table.NewRow();
+            for (int col = 1; col <= table.Columns.Count; col++)
             {
-                var worksheet = workbook.Worksheet(1);
-                var lastRow = worksheet.LastRowUsed().RowNumber();
-                var lastDataRow = lastRow - 2; // exclude the last 2 rows entirely
-
-                foreach (var row in worksheet.RowsUsed())
-                {
-                    int rowNum = row.RowNumber();
-
-                    if (rowNum <= 16)
-                        continue;
-
-                    if (rowNum > lastDataRow)
-                        break;
-
-                    string firstCell = row.Cell(1).GetString().Trim();
-
-                    if (string.IsNullOrWhiteSpace(firstCell))
-                        continue; // skip separator/blank rows
-
-                    var record = new CardImport
-                    {
-                        ClientBranch = row.Cell(1).GetString().Trim(),
-                        CardBranch = row.Cell(2).GetString().Trim(),
-                        Pan = row.Cell(3).GetString().Trim(),
-                        Mbr = ParseIntOrDefault(row.Cell(4).GetString()),
-                        CustomerName = row.Cell(5).GetString().Trim(),
-                        ClientId = row.Cell(6).GetString().Trim(),
-                        EmbossingName = row.Cell(7).GetString().Trim(),
-                        CurrentCmsStatus = row.Cell(8).GetString().Trim(),
-                        CurrentOnlineStatus = row.Cell(9).GetString().Trim(),
-                        CreationDate = ParseDateOrNull(row.Cell(10).GetString()),
-                        ExpiryDate = ParseDateOrNull(row.Cell(11).GetString()),
-                        ActivationDate = ParseDateOrNull(row.Cell(12).GetString()),
-                        ClosingDate = ParseDateOrNull(row.Cell(13).GetString()),
-                        InternalAcc = row.Cell(14).GetString().Trim(),
-                        ExternalAcc = row.Cell(15).GetString().Trim(),
-                        AccountCurrency = row.Cell(16).GetString().Trim(),
-                        MobileNumber = row.Cell(17).GetString().Trim(),
-                        PassportNumber = row.Cell(18).GetString().Trim(),
-                        CurrentBalance = ParseDecimalOrDefault(row.Cell(19).GetString()),
-                        CreditLimit = ParseDecimalOrDefault(row.Cell(20).GetString()),
-                        LimitCurrency = row.Cell(21).GetString().Trim(),
-                        OnHold = ParseDecimalOrDefault(row.Cell(22).GetString()),
-                        ArrestedAmount = ParseDecimalOrDefault(row.Cell(23).GetString()),
-                        CardType = row.Cell(24).GetString().Trim(),
-                        LimitGroup = row.Cell(25).GetString().Trim(),
-                        FinancialProfile = row.Cell(26).GetString().Trim(),
-                        ClerkCode = row.Cell(27).GetString().Trim(),
-                        IssuanceReason = row.Cell(28).GetString().Trim(),
-                        CardProductName = row.Cell(29).GetString().Trim(),
-                        ExternalCode = row.Cell(30).GetString().Trim(),
-                        IssuancePriority = ParseIntOrDefault(row.Cell(31).GetString()),
-                        PersonalCode = row.Cell(32).GetString().Trim(),
-                        ContractNumber = row.Cell(33).GetString().Trim(),
-                        Gender = row.Cell(34).GetString().Trim(),
-                        Birthday = ParseDateOrNull(row.Cell(35).GetString()),
-                        ContactAddress = row.Cell(36).GetString().Trim(),
-                        Contactless = row.Cell(37).GetString().Trim(),
-                    };
-
-                    records.Add(record);
-                }
+                string cellValue = row.Cell(col).GetString().Trim();
+                var columnType = table.Columns[col - 1].DataType;
+                dataRow[col - 1] = ConvertValue(cellValue, columnType);
             }
 
-            return records;
+            table.Rows.Add(dataRow);
         }
 
-        public void ImportCardRecords(string filePath, string archiveFolder)
+        return table;
+    }
+
+    public void ImportFile(string filePath, string archiveFolder)
+    {
+        DataTable table = ReadExcelToDataTable(filePath);
+        string tableName = _repository.GetTablePrefix(filePath);
+
+        if (!_repository.TableExists(tableName))
         {
-            List<CardImport> records = ReadCardRecordsFromExcel(filePath);
-
-            _repository.BulkInsertAsync(records); // Service calls Repository
-
-            string fileName = Path.GetFileName(filePath);
-            string archivePath = Path.Combine(archiveFolder, fileName);
-            File.Move(filePath, archivePath);
+            _repository.CreateTableFromDataTable(tableName, table);
         }
 
-        public void ImportAllPendingFiles(string sourceFolder, string archiveFolder)
-        {
-            var excelFiles = Directory.GetFiles(sourceFolder, "*.xlsx");
+        _repository.InsertDataTable(tableName, table);
 
-            foreach (var filePath in excelFiles)
+        string fileName = Path.GetFileName(filePath);
+        string archivePath = Path.Combine(archiveFolder, fileName);
+        File.Move(filePath, archivePath);
+    }
+
+    public void ImportAllPendingFiles(string sourceFolder, string archiveFolder)
+    {
+        var excelFiles = Directory.GetFiles(sourceFolder, "*.xlsx");
+
+        foreach (var filePath in excelFiles)
+        {
+            try
             {
-                try
-                {
-                    ImportCardRecords(filePath, archiveFolder);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to import {filePath}: {ex.Message}");
-                }
+                ImportFile(filePath, archiveFolder);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to import {filePath}: {ex.Message}");
             }
         }
+    }
 
-        // --- Helper methods for safe parsing ---
+    private Type InferType(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return typeof(string);
 
-        private int ParseIntOrDefault(string value)
-        {
-            return int.TryParse(value?.Trim(), out int result) ? result : 0;
-        }
+        if (DateTime.TryParseExact(value, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            return typeof(DateTime);
 
-        private decimal ParseDecimalOrDefault(string value)
-        {
-            return decimal.TryParse(value?.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal result)
-                ? result
-                : 0;
-        }
+        if (int.TryParse(value, out _))
+            return typeof(int);
 
-        private DateTime? ParseDateOrNull(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
+        if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out _))
+            return typeof(decimal);
 
-            return DateTime.TryParseExact(value.Trim(), "dd/MM/yyyy", CultureInfo.InvariantCulture,
-                DateTimeStyles.None, out DateTime result)
-                ? result
-                : (DateTime?)null;
-        }
+        return typeof(string);
+    }
+
+    private object ConvertValue(string value, Type targetType)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return DBNull.Value;
+
+        if (targetType == typeof(int) && int.TryParse(value, out int i))
+            return i;
+
+        if (targetType == typeof(decimal) && decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal d))
+            return d;
+
+        if (targetType == typeof(DateTime) && DateTime.TryParseExact(value, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime dt))
+            return dt;
+
+        return value;
     }
 }
