@@ -7,11 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ExcelImporter.Repository\ExcelImporter.Repository.csproj" />
+    <Compile Remove="Validators\**" />
+    <EmbeddedResource Remove="Validators\**" />
+    <None Remove="Validators\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Validators\" />
+    <ProjectReference Include="..\ExcelImporter.Repository\ExcelImporter.Repository.csproj" />
   </ItemGroup>
 
   <ItemGroup>
