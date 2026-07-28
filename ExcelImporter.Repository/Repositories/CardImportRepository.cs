@@ -15,7 +15,7 @@ namespace ExcelImporter.Repository.Repositories
 
         public Task BulkInsertAsync(IEnumerable<CardImport> cardImports)
         {
-            throw new NotImplementedException();
+            throw new NotImplementedException();    
         }
     }
 }

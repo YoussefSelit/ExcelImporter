@@ -22,6 +22,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Oracle.EntityFrameworkCore" Version="10.23.26300" />
+    <PackageReference Include="Oracle.ManagedDataAccess" Version="23.26.300" />
     <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.26.300" />
   </ItemGroup>
 
