@@ -16,14 +16,14 @@ namespace ExcelImporter.Worker
 
                 var importer = scope.ServiceProvider.GetRequiredService<IExcelImportService>();
 
-                string sourceFolder = configuration["ExcelSettings:SourceFolder"]!;
+                string inputFolder = configuration["ExcelSettings:InputFolder"]!;
                 string processedFolder = configuration["ExcelSettings:ProcessedFolder"]!;
 
                 try
                 {
                     logger.LogInformation("Checking for Excel files...");
 
-                    importer.ImportAllPendingFiles(sourceFolder, processedFolder);
+                    importer.ImportAllPendingFiles(inputFolder, processedFolder);
 
                     logger.LogInformation("Import completed.");
                 }
